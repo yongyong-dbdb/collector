@@ -1,0 +1,22 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: toss-chart-collector-config
+  namespace: postgres
+data:
+  DB_HOST: pg-cluster-rw
+  DB_PORT: "5432"
+  DB_NAME: appdb
+  ENABLE_TOSS: "true"
+  ENABLE_YAHOO: "true"
+  RUN_ONCE: "false"
+  SLEEP_SECONDS: "300"
+  REQUEST_TIMEOUT: "20"
+  REQUEST_RETRIES: "3"
+  RETRY_BACKOFF_SECONDS: "2"
+  TOSS_OPENAPI_BASE_URL: https://openapi.tossinvest.com
+  TOSS_TOKEN_EXPIRY_SKEW_SECONDS: "60"
+  YAHOO_RANGE: 1d
+  YAHOO_INTERVAL: 1m
+  YAHOO_RECENT_CANDLES: "15"
+  YAHOO_INCLUDE_PREPOST: "true"
