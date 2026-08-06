@@ -37,6 +37,172 @@ class CandleRepository:
             )
         return products
 
+    def get_toss_symbols(self) -> list[str]:
+        sql = """
+            SELECT symbol
+            FROM public.symbol_master
+            WHERE source = 'TOSS' AND symbol IS NOT NULL
+            ORDER BY collection_priority, symbol_id
+        """
+        with self.database.connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql)
+                return [str(row[0]) for row in cursor.fetchall()]
+
+    def sync_toss_stock_metadata(self) -> int:
+        sql_master = """
+            UPDATE public.symbol_master AS sm
+            SET name = tsi.name,
+                category = tsi.security_type,
+                market = CASE WHEN tsi.currency = 'KRW' THEN 'KR' ELSE 'US' END,
+                market_type = CASE WHEN tsi.currency = 'KRW' THEN 'kr-s' ELSE 'us-s' END,
+                updated_at = now()
+            FROM public.toss_stock_info AS tsi
+            WHERE sm.source = 'TOSS'
+              AND tsi.symbol = CASE
+                    WHEN sm.symbol ~ '^A[0-9]{6}$' THEN substring(sm.symbol FROM 2)
+                    ELSE sm.symbol
+                  END
+        """
+        sql_candles = """
+            UPDATE public.toss_chart_candle AS candle
+            SET product_name = tsi.name,
+                updated_at = now()
+            FROM public.toss_stock_info AS tsi
+            WHERE tsi.symbol = CASE
+                    WHEN candle.product_symbol ~ '^A[0-9]{6}$'
+                        THEN substring(candle.product_symbol FROM 2)
+                    ELSE candle.product_symbol
+                  END
+              AND candle.product_name IS DISTINCT FROM tsi.name
+        """
+        sql_disable_unresolved = """
+            UPDATE public.symbol_master AS sm
+            SET collection_enabled = false,
+                updated_at = now()
+            WHERE sm.source = 'TOSS'
+              AND sm.held_in_account = false
+              AND EXISTS (SELECT 1 FROM public.toss_stock_info)
+              AND NOT EXISTS (
+                    SELECT 1
+                    FROM public.toss_stock_info AS tsi
+                    WHERE tsi.symbol = CASE
+                            WHEN sm.symbol ~ '^A[0-9]{6}$'
+                                THEN substring(sm.symbol FROM 2)
+                            ELSE sm.symbol
+                          END
+              )
+        """
+        with self.database.connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql_master)
+                updated_master = cursor.rowcount
+                cursor.execute(sql_candles)
+                cursor.execute(sql_disable_unresolved)
+        return updated_master
+
+    def save_toss_stock_info(self, rows: list[dict]) -> int:
+        if not rows:
+            return 0
+        sql = """
+            INSERT INTO public.toss_stock_info (
+                symbol, name, english_name, isin_code, market, security_type,
+                is_common_share, status, currency, list_date, delist_date,
+                shares_outstanding, leverage_factor, liquidation_trading,
+                nxt_supported, krx_trading_suspended, nxt_trading_suspended,
+                raw_data
+            ) VALUES %s
+            ON CONFLICT (symbol) DO UPDATE SET
+                name = EXCLUDED.name,
+                english_name = EXCLUDED.english_name,
+                isin_code = EXCLUDED.isin_code,
+                market = EXCLUDED.market,
+                security_type = EXCLUDED.security_type,
+                is_common_share = EXCLUDED.is_common_share,
+                status = EXCLUDED.status,
+                currency = EXCLUDED.currency,
+                list_date = EXCLUDED.list_date,
+                delist_date = EXCLUDED.delist_date,
+                shares_outstanding = EXCLUDED.shares_outstanding,
+                leverage_factor = EXCLUDED.leverage_factor,
+                liquidation_trading = EXCLUDED.liquidation_trading,
+                nxt_supported = EXCLUDED.nxt_supported,
+                krx_trading_suspended = EXCLUDED.krx_trading_suspended,
+                nxt_trading_suspended = EXCLUDED.nxt_trading_suspended,
+                raw_data = EXCLUDED.raw_data,
+                updated_at = now()
+        """
+        values = []
+        for row in rows:
+            detail = row.get("koreanMarketDetail") or {}
+            values.append((
+                row.get("symbol"), row.get("name"), row.get("englishName"),
+                row.get("isinCode"), row.get("market"), row.get("securityType"),
+                row.get("isCommonShare"), row.get("status"), row.get("currency"),
+                row.get("listDate"), row.get("delistDate"), row.get("sharesOutstanding"),
+                row.get("leverageFactor"), detail.get("liquidationTrading"),
+                detail.get("nxtSupported"), detail.get("krxTradingSuspended"),
+                detail.get("nxtTradingSuspended"), Json(row),
+            ))
+        with self.database.connect() as conn:
+            with conn.cursor() as cursor:
+                execute_values(cursor, sql, values, page_size=200)
+        return len(values)
+
+    def sync_holding_symbols(self, holdings: list[dict], stock_info: list[dict]) -> int:
+        info_by_symbol = {str(row.get("symbol")): row for row in stock_info}
+        sql_reset = """
+            UPDATE public.symbol_master
+            SET held_in_account = false,
+                collection_enabled = CASE
+                    WHEN managed_by_holdings THEN false
+                    ELSE collection_enabled
+                END,
+                updated_at = now()
+            WHERE source = 'TOSS' AND held_in_account = true
+        """
+        sql_upsert = """
+            INSERT INTO public.symbol_master AS sm (
+                source, market, category, symbol, name, source_code, market_type,
+                interval_type, chart_range, recent_candle_count,
+                collection_enabled, collection_priority, held_in_account,
+                managed_by_holdings, description, updated_at
+            ) VALUES %s
+            ON CONFLICT (source, source_code)
+                WHERE source = 'TOSS' AND source_code IS NOT NULL
+            DO UPDATE SET
+                market = EXCLUDED.market,
+                category = EXCLUDED.category,
+                name = EXCLUDED.name,
+                market_type = EXCLUDED.market_type,
+                held_in_account = true,
+                collection_enabled = CASE
+                    WHEN sm.managed_by_holdings THEN true
+                    ELSE sm.collection_enabled
+                END,
+                updated_at = now()
+        """
+        values = []
+        for holding in holdings:
+            symbol = str(holding["symbol"])
+            info = info_by_symbol.get(symbol, {})
+            currency = info.get("currency") or holding.get("currency")
+            country = holding.get("marketCountry") or ("KR" if currency == "KRW" else "US")
+            market_type = "kr-s" if country == "KR" else "us-s"
+            values.append((
+                "TOSS", country, info.get("securityType") or "STOCK", symbol,
+                info.get("name") or holding.get("name") or symbol, symbol, market_type,
+                "1m", "min:1", 21, True, 50, True, True,
+                "Automatically synchronized from Toss holdings",
+            ))
+        with self.database.connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql_reset)
+                if values:
+                    template = "(%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,%s,now())"
+                    execute_values(cursor, sql_upsert, values, template=template, page_size=200)
+        return len(values)
+
     def save_toss_candles(
         self,
         market_type: str,

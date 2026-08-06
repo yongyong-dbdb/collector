@@ -3,7 +3,7 @@ from __future__ import annotations
 import time
 from datetime import datetime, timezone
 
-from collectors import TossCollector, YahooCollector
+from collectors import TossCollector, TossReferenceCollector, YahooCollector
 from config import load_settings
 from database import Database
 from http_client import HttpClient
@@ -36,6 +36,7 @@ def main() -> None:
     )
 
     collectors = []
+    reference_collector = None
     if settings.enable_toss:
         toss_api_client = TossOpenApiClient(
             http_client,
@@ -45,6 +46,8 @@ def main() -> None:
             settings.toss_token_expiry_skew_seconds,
         )
         collectors.append(TossCollector(settings, toss_api_client, repository))
+        if settings.enable_toss_reference_sync:
+            reference_collector = TossReferenceCollector(settings, toss_api_client, repository)
     if settings.enable_yahoo:
         collectors.append(YahooCollector(settings, http_client, repository))
 
@@ -60,6 +63,12 @@ def main() -> None:
     while True:
         started_at = datetime.now(timezone.utc)
         all_results: list[CollectionResult] = []
+
+        if reference_collector is not None:
+            try:
+                reference_collector.collect_if_due()
+            except Exception as exc:
+                print(f"[TOSS:REFERENCE] ERROR {type(exc).__name__}: {exc}", flush=True)
 
         for collector in collectors:
             all_results.extend(collector.collect_once())

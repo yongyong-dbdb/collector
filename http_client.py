@@ -18,7 +18,7 @@ class HttpClient:
         self.retries = max(retries, 1)
         self.backoff_seconds = max(backoff_seconds, 1)
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "toss-chart-collector/1.4.0", "Accept": "application/json"})
+        self.session.headers.update({"User-Agent": "toss-chart-collector/1.5.0", "Accept": "application/json"})
 
     def request_json(
         self,
@@ -31,6 +31,7 @@ class HttpClient:
     ) -> dict[str, Any]:
         last_error: Exception | None = None
         for attempt in range(1, self.retries + 1):
+            retry_after: str | None = None
             try:
                 response = self.session.request(
                     method, url, params=params, data=data, headers=headers, timeout=self.timeout
@@ -41,6 +42,7 @@ class HttpClient:
                     if response.status_code < 500 and response.status_code != 429:
                         raise error
                     last_error = error
+                    retry_after = response.headers.get("Retry-After")
                 else:
                     payload = response.json()
                     if not isinstance(payload, dict):
@@ -54,6 +56,11 @@ class HttpClient:
             if attempt >= self.retries:
                 break
             wait_seconds = self.backoff_seconds * attempt
+            if retry_after:
+                try:
+                    wait_seconds = max(wait_seconds, float(retry_after))
+                except ValueError:
+                    pass
             print(
                 f"[HTTP] retry={attempt}/{self.retries - 1} wait={wait_seconds}s "
                 f"error={type(last_error).__name__}: {last_error}",

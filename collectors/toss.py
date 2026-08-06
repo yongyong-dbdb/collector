@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import time
 from typing import Any
 
 from config import AppSettings
@@ -16,8 +17,17 @@ class TossCollector:
         self.settings = settings
         self.api_client = api_client
         self.repository = repository
+        self._last_request_started_at = 0.0
+
+    def _wait_for_rate_limit(self) -> None:
+        minimum = self.settings.toss_candle_min_interval_seconds
+        elapsed = time.monotonic() - self._last_request_started_at
+        if elapsed < minimum:
+            time.sleep(minimum - elapsed)
+        self._last_request_started_at = time.monotonic()
 
     def _fetch(self, product: TossProduct) -> dict[str, Any]:
+        self._wait_for_rate_limit()
         return self.api_client.get_json(
             self.CANDLES_PATH,
             params={

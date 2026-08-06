@@ -2,7 +2,7 @@
 
 Toss Securities Open API와 Yahoo Finance에서 시세 데이터를 수집해 PostgreSQL에 저장하는 Kubernetes용 Collector입니다.
 
-## v1.4.0
+## v1.5.0
 
 - Toss 공식 Open API (`https://openapi.tossinvest.com`) 사용
 - OAuth2 `client_credentials` 액세스 토큰 자동 발급 및 메모리 캐시
@@ -10,6 +10,10 @@ Toss Securities Open API와 Yahoo Finance에서 시세 데이터를 수집해 Po
 - `symbol_master.source_code`를 공식 Toss 심볼로 사용
 - Yahoo Finance 수집 유지
 - Kubernetes Secret 기반 자격증명 주입
+- Stock Info 하루 1회 UPSERT
+- 보유 계좌의 종목을 하루 1회 `symbol_master`에 자동 동기화
+- 자동 추가 종목을 전량 매도하면 수집 비활성화, 수동 등록 종목은 유지
+- 읽기 전용 API 허용목록 적용: 계좌·보유종목·종목정보·캔들만 허용하며 주문 API는 차단
 
 ## 디렉터리
 
@@ -43,7 +47,7 @@ client-secret -> TOSS_OPENAPI_CLIENT_SECRET
 ## Docker
 
 ```powershell
-docker build --no-cache -t yongyongvvv/toss-chart-collector:v1.4.0 -t yongyongvvv/toss-chart-collector:latest .
+docker build --no-cache -t yongyongvvv/toss-chart-collector:v1.5.0 -t yongyongvvv/toss-chart-collector:latest .
 ```
 
 ## Kubernetes 배포

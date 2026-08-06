@@ -112,20 +112,6 @@ VALUES
         true
     ),
     (
-        'TOSS',
-        'US',
-        'STOCK',
-        'AMX2606012005',
-        '미국 주식',
-        'AMX2606012005',
-        'us-s',
-        '5m',
-        'day',
-        10,
-        30,
-        true
-    ),
-    (
         'YAHOO',
         'US',
         'INDEX',

@@ -18,6 +18,16 @@ def env_int(name: str, default: int) -> int:
         raise ValueError(f"{name} must be an integer: {value}") from exc
 
 
+def env_float(name: str, default: float) -> float:
+    value = os.getenv(name)
+    if value is None:
+        return default
+    try:
+        return float(value)
+    except ValueError as exc:
+        raise ValueError(f"{name} must be a number: {value}") from exc
+
+
 @dataclass(frozen=True)
 class DatabaseSettings:
     host: str
@@ -42,6 +52,9 @@ class AppSettings:
     toss_openapi_client_id: str
     toss_openapi_client_secret: str
     toss_token_expiry_skew_seconds: int
+    toss_candle_min_interval_seconds: float
+    enable_toss_reference_sync: bool
+    toss_reference_sync_seconds: int
     yahoo_range: str
     yahoo_interval: str
     yahoo_recent_candles: int
@@ -72,6 +85,9 @@ def load_settings() -> AppSettings:
         toss_openapi_client_id=os.getenv("TOSS_OPENAPI_CLIENT_ID", "").strip(),
         toss_openapi_client_secret=os.getenv("TOSS_OPENAPI_CLIENT_SECRET", "").strip(),
         toss_token_expiry_skew_seconds=env_int("TOSS_TOKEN_EXPIRY_SKEW_SECONDS", 60),
+        toss_candle_min_interval_seconds=env_float("TOSS_CANDLE_MIN_INTERVAL_SECONDS", 0.22),
+        enable_toss_reference_sync=env_bool("ENABLE_TOSS_REFERENCE_SYNC", True),
+        toss_reference_sync_seconds=env_int("TOSS_REFERENCE_SYNC_SECONDS", 86400),
         yahoo_range=os.getenv("YAHOO_RANGE", "1d"),
         yahoo_interval=os.getenv("YAHOO_INTERVAL", "1m"),
         yahoo_recent_candles=env_int("YAHOO_RECENT_CANDLES", 15),
@@ -87,4 +103,8 @@ def load_settings() -> AppSettings:
         )
     if settings.sleep_seconds < 1:
         raise ValueError("SLEEP_SECONDS must be at least 1")
+    if settings.toss_reference_sync_seconds < 60:
+        raise ValueError("TOSS_REFERENCE_SYNC_SECONDS must be at least 60")
+    if settings.toss_candle_min_interval_seconds < 0:
+        raise ValueError("TOSS_CANDLE_MIN_INTERVAL_SECONDS must be at least 0")
     return settings

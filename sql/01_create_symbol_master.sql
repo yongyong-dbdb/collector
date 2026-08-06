@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS public.symbol_master
     recent_candle_count    INTEGER     NOT NULL DEFAULT 15,
     collection_enabled     BOOLEAN     NOT NULL DEFAULT true,
     collection_priority    INTEGER     NOT NULL DEFAULT 100,
+    held_in_account        BOOLEAN     NOT NULL DEFAULT false,
+    managed_by_holdings    BOOLEAN     NOT NULL DEFAULT false,
     description            TEXT,
     created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
     updated_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -65,6 +67,12 @@ ALTER TABLE public.symbol_master
     ADD COLUMN IF NOT EXISTS collection_priority INTEGER DEFAULT 100;
 
 ALTER TABLE public.symbol_master
+    ADD COLUMN IF NOT EXISTS held_in_account BOOLEAN DEFAULT false;
+
+ALTER TABLE public.symbol_master
+    ADD COLUMN IF NOT EXISTS managed_by_holdings BOOLEAN DEFAULT false;
+
+ALTER TABLE public.symbol_master
     ADD COLUMN IF NOT EXISTS description TEXT;
 
 ALTER TABLE public.symbol_master
@@ -80,6 +88,8 @@ SET
     recent_candle_count = COALESCE(recent_candle_count, 15),
     collection_enabled  = COALESCE(collection_enabled, true),
     collection_priority = COALESCE(collection_priority, 100),
+    held_in_account      = COALESCE(held_in_account, false),
+    managed_by_holdings  = COALESCE(managed_by_holdings, false),
     created_at          = COALESCE(created_at, now()),
     updated_at          = COALESCE(updated_at, now());
 
@@ -89,6 +99,8 @@ ALTER TABLE public.symbol_master
     ALTER COLUMN recent_candle_count SET DEFAULT 15,
     ALTER COLUMN collection_enabled SET DEFAULT true,
     ALTER COLUMN collection_priority SET DEFAULT 100,
+    ALTER COLUMN held_in_account SET DEFAULT false,
+    ALTER COLUMN managed_by_holdings SET DEFAULT false,
     ALTER COLUMN created_at SET DEFAULT now(),
     ALTER COLUMN updated_at SET DEFAULT now();
 
@@ -163,21 +175,6 @@ VALUES
     true,
     20,
     'Toss Invest KR stock'
-),
-(
-    'TOSS',
-    'US',
-    'STOCK',
-    'AMX2606012005',
-    'US Stock',
-    'AMX2606012005',
-    'us-s',
-    '5m',
-    'day',
-    10,
-    true,
-    30,
-    'Toss Invest US stock'
 ),
 (
     'YAHOO',

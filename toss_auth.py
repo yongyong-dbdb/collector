@@ -8,6 +8,13 @@ from http_client import HttpClient, HttpStatusError
 
 
 class TossOpenApiClient:
+    READ_ONLY_PATHS = {
+        "/api/v1/accounts",
+        "/api/v1/holdings",
+        "/api/v1/stocks",
+        "/api/v1/candles",
+    }
+
     def __init__(self, http_client: HttpClient, base_url: str, client_id: str,
                  client_secret: str, expiry_skew_seconds: int = 60) -> None:
         self.http_client = http_client
@@ -52,14 +59,24 @@ class TossOpenApiClient:
             self._access_token = None
             self._expires_at = 0.0
 
-    def get_json(self, path: str, *, params: dict[str, Any]) -> dict[str, Any]:
+    def get_json(
+        self,
+        path: str,
+        *,
+        params: dict[str, Any] | None = None,
+        headers: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        if path not in self.READ_ONLY_PATHS:
+            raise ValueError(f"Toss Open API path is not allowed by read-only policy: {path}")
         for auth_attempt in range(2):
             token = self._get_token(force_refresh=auth_attempt == 1)
             try:
+                request_headers = dict(headers or {})
+                request_headers["Authorization"] = f"Bearer {token}"
                 return self.http_client.get_json(
                     f"{self.base_url}{path}",
                     params=params,
-                    headers={"Authorization": f"Bearer {token}"},
+                    headers=request_headers,
                 )
             except HttpStatusError as exc:
                 if exc.status_code != 401 or auth_attempt == 1:

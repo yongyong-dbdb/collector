@@ -1,0 +1,83 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: toss-chart-collector-migration-v1-5-0
+  namespace: postgres
+data:
+  migration.sql: |
+    BEGIN;
+
+    ALTER TABLE public.symbol_master
+        ADD COLUMN IF NOT EXISTS held_in_account BOOLEAN NOT NULL DEFAULT false,
+        ADD COLUMN IF NOT EXISTS managed_by_holdings BOOLEAN NOT NULL DEFAULT false;
+
+    CREATE TABLE IF NOT EXISTS public.toss_stock_info
+    (
+        symbol                    TEXT PRIMARY KEY,
+        name                      TEXT NOT NULL,
+        english_name              TEXT,
+        isin_code                 TEXT,
+        market                    TEXT,
+        security_type             TEXT,
+        is_common_share           BOOLEAN,
+        status                    TEXT,
+        currency                  TEXT,
+        list_date                 DATE,
+        delist_date               DATE,
+        shares_outstanding        NUMERIC,
+        leverage_factor           NUMERIC,
+        liquidation_trading       BOOLEAN,
+        nxt_supported             BOOLEAN,
+        krx_trading_suspended     BOOLEAN,
+        nxt_trading_suspended     BOOLEAN,
+        raw_data                  JSONB NOT NULL,
+        collected_at              TIMESTAMPTZ NOT NULL DEFAULT now(),
+        updated_at                TIMESTAMPTZ NOT NULL DEFAULT now()
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_toss_stock_info_status_market
+        ON public.toss_stock_info (status, market);
+
+    COMMIT;
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: toss-chart-collector-migration-v1-5-0
+  namespace: postgres
+spec:
+  backoffLimit: 1
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: postgres:18-alpine
+          imagePullPolicy: IfNotPresent
+          command: ["psql"]
+          args:
+            - --host=pg-cluster-rw
+            - --port=5432
+            - --dbname=appdb
+            - --username=$(DB_USER)
+            - --set=ON_ERROR_STOP=1
+            - --file=/migration/migration.sql
+          env:
+            - name: DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: pg-cluster-app
+                  key: username
+            - name: PGPASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: pg-cluster-app
+                  key: password
+          volumeMounts:
+            - name: migration
+              mountPath: /migration
+              readOnly: true
+      volumes:
+        - name: migration
+          configMap:
+            name: toss-chart-collector-migration-v1-5-0
