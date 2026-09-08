@@ -5,7 +5,7 @@ WORKDIR /app
 COPY requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-COPY config.py database.py http_client.py main.py models.py repository.py toss_auth.py ./
+COPY config.py database.py http_client.py main.py models.py repository.py news_repository.py toss_auth.py wts_client.py ./
 COPY collectors ./collectors
 COPY sql ./sql
 
