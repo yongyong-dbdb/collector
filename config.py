@@ -43,6 +43,7 @@ class AppSettings:
     database: DatabaseSettings
     enable_toss: bool
     enable_yahoo: bool
+    enable_toss_news: bool
     run_once: bool
     sleep_seconds: int
     request_timeout: int
@@ -55,6 +56,12 @@ class AppSettings:
     toss_candle_min_interval_seconds: float
     enable_toss_reference_sync: bool
     toss_reference_sync_seconds: int
+    toss_wts_web_base_url: str
+    toss_wts_info_base_url: str
+    toss_news_scope: str
+    toss_news_limit: int
+    toss_news_detail_enabled: bool
+    toss_news_detail_max_per_cycle: int
     yahoo_range: str
     yahoo_interval: str
     yahoo_recent_candles: int
@@ -74,6 +81,7 @@ def load_settings() -> AppSettings:
         database=database,
         enable_toss=env_bool("ENABLE_TOSS", True),
         enable_yahoo=env_bool("ENABLE_YAHOO", True),
+        enable_toss_news=env_bool("ENABLE_TOSS_NEWS", True),
         run_once=env_bool("RUN_ONCE", False),
         sleep_seconds=env_int("SLEEP_SECONDS", 300),
         request_timeout=env_int("REQUEST_TIMEOUT", 20),
@@ -88,12 +96,22 @@ def load_settings() -> AppSettings:
         toss_candle_min_interval_seconds=env_float("TOSS_CANDLE_MIN_INTERVAL_SECONDS", 0.22),
         enable_toss_reference_sync=env_bool("ENABLE_TOSS_REFERENCE_SYNC", True),
         toss_reference_sync_seconds=env_int("TOSS_REFERENCE_SYNC_SECONDS", 86400),
+        toss_wts_web_base_url=os.getenv(
+            "TOSS_WTS_WEB_BASE_URL", "https://www.tossinvest.com"
+        ).rstrip("/"),
+        toss_wts_info_base_url=os.getenv(
+            "TOSS_WTS_INFO_BASE_URL", "https://wts-info-api.tossinvest.com"
+        ).rstrip("/"),
+        toss_news_scope=os.getenv("TOSS_NEWS_SCOPE", "ALL_HIGHLIGHT").strip().upper(),
+        toss_news_limit=env_int("TOSS_NEWS_LIMIT", 50),
+        toss_news_detail_enabled=env_bool("TOSS_NEWS_DETAIL_ENABLED", True),
+        toss_news_detail_max_per_cycle=env_int("TOSS_NEWS_DETAIL_MAX_PER_CYCLE", 20),
         yahoo_range=os.getenv("YAHOO_RANGE", "1d"),
         yahoo_interval=os.getenv("YAHOO_INTERVAL", "1m"),
         yahoo_recent_candles=env_int("YAHOO_RECENT_CANDLES", 15),
         yahoo_include_prepost=env_bool("YAHOO_INCLUDE_PREPOST", True),
     )
-    if not settings.enable_toss and not settings.enable_yahoo:
+    if not settings.enable_toss and not settings.enable_yahoo and not settings.enable_toss_news:
         raise ValueError("At least one collector must be enabled")
     if settings.enable_toss and (
         not settings.toss_openapi_client_id or not settings.toss_openapi_client_secret
@@ -107,4 +125,10 @@ def load_settings() -> AppSettings:
         raise ValueError("TOSS_REFERENCE_SYNC_SECONDS must be at least 60")
     if settings.toss_candle_min_interval_seconds < 0:
         raise ValueError("TOSS_CANDLE_MIN_INTERVAL_SECONDS must be at least 0")
+    if settings.toss_news_limit < 1 or settings.toss_news_limit > 50:
+        raise ValueError("TOSS_NEWS_LIMIT must be between 1 and 50")
+    if settings.toss_news_detail_max_per_cycle < 0:
+        raise ValueError("TOSS_NEWS_DETAIL_MAX_PER_CYCLE must be at least 0")
+    if not settings.toss_news_scope:
+        raise ValueError("TOSS_NEWS_SCOPE must not be empty")
     return settings
