@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime
+
 from psycopg2.extras import Json, execute_values
 
 from database import Database
@@ -36,6 +38,25 @@ class CandleRepository:
                 )
             )
         return products
+
+    def get_latest_toss_candle_time(
+        self,
+        market_type: str,
+        product_code: str,
+        chart_range: str,
+    ) -> datetime | None:
+        sql = """
+            SELECT MAX(candle_time::timestamptz)
+            FROM public.toss_chart_candle
+            WHERE market_type = %s
+              AND product_code = %s
+              AND chart_range = %s
+        """
+        with self.database.connect() as conn:
+            with conn.cursor() as cursor:
+                cursor.execute(sql, (market_type, product_code, chart_range))
+                row = cursor.fetchone()
+        return row[0] if row and row[0] is not None else None
 
     def get_toss_symbols(self) -> list[str]:
         sql = """
