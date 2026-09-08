@@ -64,12 +64,22 @@ class NewsRepository:
             FROM public.market_news AS n
             LEFT JOIN public.market_news_detail AS d
                    ON d.news_id = n.news_id
-            WHERE n.news_id = ANY(%s)
-              AND (
-                    d.news_id IS NULL
-                    OR NULLIF(BTRIM(d.content), '') IS NULL
-              )
-            ORDER BY n.created_at DESC, n.news_id
+            WHERE (
+                    d.news_id IS NOT NULL
+                    AND NULLIF(BTRIM(d.content), '') IS NULL
+                  )
+               OR (
+                    n.news_id = ANY(%s)
+                    AND d.news_id IS NULL
+                  )
+            ORDER BY
+                CASE
+                    WHEN d.news_id IS NOT NULL
+                     AND NULLIF(BTRIM(d.content), '') IS NULL THEN 0
+                    ELSE 1
+                END,
+                n.created_at DESC,
+                n.news_id
             LIMIT %s
         """
         with self.database.connect() as conn:
