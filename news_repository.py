@@ -62,11 +62,12 @@ class NewsRepository:
         sql = """
             SELECT n.news_id
             FROM public.market_news AS n
+            LEFT JOIN public.market_news_detail AS d
+                   ON d.news_id = n.news_id
             WHERE n.news_id = ANY(%s)
-              AND NOT EXISTS (
-                    SELECT 1
-                    FROM public.market_news_detail AS d
-                    WHERE d.news_id = n.news_id
+              AND (
+                    d.news_id IS NULL
+                    OR NULLIF(BTRIM(d.content), '') IS NULL
               )
             ORDER BY n.created_at DESC, n.news_id
             LIMIT %s
