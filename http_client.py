@@ -18,7 +18,7 @@ class HttpClient:
         self.retries = max(retries, 1)
         self.backoff_seconds = max(backoff_seconds, 1)
         self.session = requests.Session()
-        self.session.headers.update({"User-Agent": "toss-chart-collector/1.5.0", "Accept": "application/json"})
+        self.session.headers.update({"User-Agent": "toss-chart-collector/1.6.0", "Accept": "application/json"})
 
     def request_json(
         self,
