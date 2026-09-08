@@ -162,11 +162,42 @@ class NewsCollector:
     @classmethod
     def _parse_detail(cls, news_id: str, payload: dict[str, Any]) -> NewsDetail:
         result = cls._unwrap(payload)
-        for key in ("news", "article", "detail"):
-            nested = result.get(key)
-            if isinstance(nested, dict):
-                result = nested
-                break
+        language: str | None = None
+        localized: dict[str, Any] | None = None
+
+        available_languages = result.get("availableLanguages")
+        if isinstance(available_languages, list):
+            ordered_languages = ["kr"] + [
+                str(value).strip()
+                for value in available_languages
+                if str(value).strip() and str(value).strip() != "kr"
+            ]
+            for candidate in ordered_languages:
+                nested = result.get(candidate)
+                if isinstance(nested, dict):
+                    language = candidate
+                    localized = nested
+                    break
+
+        if localized is None:
+            for candidate in ("kr", "ko", "en"):
+                nested = result.get(candidate)
+                if isinstance(nested, dict):
+                    language = candidate
+                    localized = nested
+                    break
+
+        if localized is None:
+            for key in ("news", "article", "detail"):
+                nested = result.get(key)
+                if isinstance(nested, dict):
+                    localized = nested
+                    break
+
+        if localized is not None:
+            result = localized
+
+        language = str(result.get("language") or language or "").strip() or None
 
         source = result.get("source")
         source_code = result.get("sourceCode")
@@ -200,12 +231,18 @@ class NewsCollector:
                     if isinstance(stock, dict) and stock.get("stockCode")
                 ]
 
+        content = cls._extract_content(result.get("content"))
+        if not content:
+            raise ValueError(
+                f"WTS news detail content is empty after parsing: news_id={news_id}"
+            )
+
         return NewsDetail(
             news_id=news_id,
-            language=result.get("language"),
+            language=language,
             summary_sentences=summary_sentences,
             sentiment=result.get("sentiment"),
-            content=cls._extract_content(result.get("content")),
+            content=content,
             source_code=source_code,
             source_name=source_name,
             writers=writers,
