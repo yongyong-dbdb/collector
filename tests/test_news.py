@@ -125,23 +125,26 @@ LIST_PAYLOAD = {
 
 DETAIL_PAYLOAD = {
     "result": {
-        "news": {
-            "language": "ko",
+        "availableLanguages": ["kr"],
+        "kr": {
+            "id": "news_1",
+            "title": "테스트 뉴스",
             "summarySentences": ["첫 문장"],
             "sentiment": "POSITIVE",
             "content": [
-                {"type": "text", "text": "[[기사 핵심 요약]] 본문 첫 문단"},
-                {"type": "text", "text": "contact@example.com (끝)"},
-                {"type": "text", "text": "Copyright 무단 전재 금지"},
+                {"type": "text", "content": "[[기사 핵심 요약]] 본문 첫 문단"},
+                {"type": "text", "content": "contact@example.com (끝)"},
+                {"type": "text", "content": "Copyright 무단 전재 금지"},
             ],
             "source": {"code": "TEST", "name": "테스트신문"},
             "writers": ["홍길동"],
             "stockCodes": ["A005930"],
             "companyCodes": ["005930"],
             "linkUrl": "https://example.com/article",
-            "createdAt": "2026-09-08T15:00:00+09:00",
-            "updatedAt": "2026-09-08T15:01:00+09:00",
-        }
+            "createdAt": "2026-09-08T15:00:00",
+            "updatedAt": "2026-09-08T15:01:00",
+        },
+        "en": None,
     }
 }
 
@@ -158,15 +161,31 @@ class NewsCollectorTests(unittest.TestCase):
             [{"stockCode": "A005930", "stockName": "삼성전자", "market": "kr"}],
         )
 
-    def test_parse_detail_cleans_content(self):
+    def test_parse_detail_selects_localized_payload_and_cleans_content(self):
         detail = NewsCollector._parse_detail("news_1", DETAIL_PAYLOAD)
+        self.assertEqual(detail.language, "kr")
         self.assertEqual(detail.source_code, "TEST")
         self.assertEqual(detail.source_name, "테스트신문")
+        self.assertEqual(detail.sentiment, "POSITIVE")
         self.assertEqual(detail.stock_codes, ["A005930"])
+        self.assertEqual(detail.created_at.utcoffset().total_seconds(), 9 * 3600)
         self.assertIn("본문 첫 문단", detail.content)
         self.assertNotIn("[[기사 핵심 요약]]", detail.content)
         self.assertNotIn("contact@example.com", detail.content)
         self.assertNotIn("Copyright", detail.content)
+
+    def test_parse_detail_rejects_empty_content(self):
+        payload = {
+            "result": {
+                "availableLanguages": ["kr"],
+                "kr": {
+                    "id": "news_empty",
+                    "content": [],
+                },
+            }
+        }
+        with self.assertRaisesRegex(ValueError, "content is empty"):
+            NewsCollector._parse_detail("news_empty", payload)
 
     def test_collect_once_fetches_only_missing_detail(self):
         repo = FakeRepository(missing_ids=["news_1"])
